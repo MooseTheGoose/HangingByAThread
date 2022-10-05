@@ -30,3 +30,17 @@
 *.exe
 *.out
 *.app
+
+# .gitignore contents from Android's ndk-samples
+.gradle
+.idea
+**/*.iml
+local.properties
+build
+*~
+.externalNativeBuild
+libwebp
+.DS_Store
+**/ndkHelperBin
+**/.cxx
+display-p3/third_party
