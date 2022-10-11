@@ -44,3 +44,16 @@ libwebp
 **/ndkHelperBin
 **/.cxx
 display-p3/third_party
+
+
+# Added by cargo
+
+/target
+
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
+/Cargo.lock
