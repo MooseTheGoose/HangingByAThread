@@ -8,6 +8,10 @@ android {
         applicationId = 'com.example.native_activity'
         minSdkVersion 21
         targetSdkVersion 33
+	ndk {
+	    abiFilters = []
+	    abiFilters.addAll(PACKAGE_ABI_FILTERS.split(',').collect { it as String })
+	}
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_static'

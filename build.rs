@@ -25,12 +25,20 @@ fn main() {
                 Arch::X86_64 => "x86_64",
                 _ => panic!("Unknown arch!")
             };
+            let clang_archstr = match archstr {
+                "i686" => "i386",
+                _ => archstr
+            };
+            let abi_suffix = match archstr {
+                "arm" => "eabi",
+                _ => ""
+            };
             let ndk = env::var("ANDROID_NDK_HOME").unwrap();
             let clang_ver = "14.0.6";
             let ndk_api_ver = "33";
             let toolchain_dir = Path::new(&ndk).join("toolchains").join("llvm").join("prebuilt").join(android_host_dir());
-            let libgcc_path = Path::new(&toolchain_dir).join("lib64").join("clang").join(clang_ver).join("lib").join("linux").join(archstr);
-            let libandroid_path = Path::new(&toolchain_dir).join("sysroot").join("usr").join("lib").join(format!("{}-linux-android", archstr)).join(ndk_api_ver);
+            let libgcc_path = Path::new(&toolchain_dir).join("lib64").join("clang").join(clang_ver).join("lib").join("linux").join(clang_archstr);
+            let libandroid_path = Path::new(&toolchain_dir).join("sysroot").join("usr").join("lib").join(format!("{}-linux-android{}", archstr, abi_suffix)).join(ndk_api_ver);
             println!("cargo:rustc-flags=-L{} -L{}", libgcc_path.as_os_str().to_str().unwrap(), libandroid_path.as_os_str().to_str().unwrap());
         },
         Os::iOs => {
