@@ -35,7 +35,7 @@ add_library(
         IMPORTED
 )
 set_target_properties(hbat PROPERTIES IMPORTED_LOCATION
-        ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libhbat.a)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../target/androabis/${ANDROID_ABI}/libhbat.a)
 
 
 

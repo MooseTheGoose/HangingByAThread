@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import os
 import subprocess
@@ -9,6 +10,17 @@ ANDROID_ABI_FILTER_LUT = {
     'i686-linux-android': 'x86',
     'armv7-linux-androideabi': 'armeabi-v7a',
 }
+
+def mkdir_p(name):
+    try:
+        os.mkdir(name)
+    except FileExistsError:
+        pass
+def unlink_f(name):
+    try:
+        os.unlink(name)
+    except FileNotFoundError:
+        pass
 
 def main():
     target_arches = {
@@ -32,18 +44,17 @@ def main():
     # Build android package using targets specified
     android_abis = [(target, ANDROID_ABI_FILTER_LUT[target]) for target in target_arches if 'android' in target]
     if len(android_abis) > 0:
+        abi_root = os.path.join('target', 'androabis')
+        mkdir_p(abi_root)
         for target, abi in android_abis:
-            jniDir = os.path.join('platform', 'Android', 'app', 'src', 'main', 'jniLibs', abi)
             targetPath = os.path.join('target', target, 'debug')
-            try:
-                os.makedirs(jniDir)
-            except FileExistsError:
-                pass
+            abiPath = os.path.join(abi_root, abi)
+            mkdir_p(abiPath)
             for fname in os.listdir(targetPath):
                 if fname.startswith('libhbat'):
-                    shutil.move(os.path.join(targetPath, fname), os.path.join(jniDir, fname))
-        subprocess.run(['gradle', 'build', '-PPACKAGE_ABI_FILTERS='+','.join([a for t,a in android_abis])],
-            shell=True, cwd=os.path.join('platform', 'Android'))
+                    abiLink = os.path.join(abiPath, fname)
+                    unlink_f(abiLink)
+                    os.link(os.path.join(targetPath, fname), os.path.join(abiPath, fname))
     # TODO: Build Apple package eventually
     return 0
 
