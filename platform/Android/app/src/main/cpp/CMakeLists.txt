@@ -1,46 +1,83 @@
-#
-# Copyright (C) The Android Open Source Project
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
+# For more information about using CMake with Android Studio, read the
+# documentation: https://d.android.com/studio/projects/add-native-code.html
 
-cmake_minimum_required(VERSION 3.4.1)
+# Sets the minimum version of CMake required to build the native library.
+
+cmake_minimum_required(VERSION 3.18.1)
+
+# Declares and names the project.
+
+project("hbatandroid")
+
+# Creates and names a library, sets it as either STATIC
+# or SHARED, and provides the relative paths to its source code.
+# You can define multiple libraries, and CMake builds them for you.
+# Gradle automatically packages shared libraries with your APK.
+
+add_library( # Sets the name of the library.
+        hbatandroid
+
+        # Sets the library as a shared library.
+        SHARED
+
+        # Provides a relative path to your source file(s).
+        main.cpp
+
+        AndroidOut.cpp
+        Renderer.cpp
+        Shader.cpp
+        TextureAsset.cpp
+        Utility.cpp)
+
+add_library(
+        hbat
+       STATIC
+        IMPORTED
+)
+set_target_properties(hbat PROPERTIES IMPORTED_LOCATION
+        ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libhbat.a)
+
+
+
+# Searches for a specified prebuilt library and stores the path as a
+# variable. Because CMake includes system libraries in the search path by
+# default, you only need to specify the name of the public NDK library
+# you want to add. CMake verifies that the library exists before
+# completing its build.
+
+find_library( # Sets the name of the path variable.
+        log-lib
+
+        # Specifies the name of the NDK library that
+        # you want CMake to locate.
+        log)
+
+# Searches for a package provided by the game activity dependency
 
 find_package(game-activity REQUIRED CONFIG)
 
-# build native_app_glue as a static lib
-set(${CMAKE_C_FLAGS}, "${CMAKE_C_FLAGS}")
+# Specifies libraries CMake should link to your target library. You
+# can link multiple libraries, such as libraries you define in this
+# build script, prebuilt third-party libraries, or system libraries.
 
-# now build app's shared lib
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11 -Wall -Werror")
+target_link_libraries( # Specifies the target library.
+        hbatandroid
+        hbat
 
-#target_include_directories(native-activity PRIVATE
-#    ${ANDROID_NDK}/sources/android/native_app_glue)
+        android
 
-get_target_property(game-activity-include
-                    game-activity::game-activity
-                    INTERFACE_INCLUDE_DIRECTORIES)
+        # The game activity
+        game-activity::game-activity
 
-add_library(native-activity SHARED
-            main.cpp
-            ${game-activity-include}/game-activity/native_app_glue/android_native_app_glue.c
-	    ${game-activity-include}/game-activity/GameActivity.cpp
-	    ${game-activity-include}/game-text-input/gametextinput.cpp)
+        # EGL, required for configuring the display context
+        EGL
 
-# add lib dependencies
-target_link_libraries(native-activity
-    game-activity::game-activity
-    android
-    EGL
-    GLESv1_CM
-    log)
+        # GL ES 3, used for the sample renderer
+        GLESv3
+
+        # for AImageDecoder, to load images from resources
+        jnigraphics
+
+        # Links the target library to the log library
+        # included in the NDK.
+        ${log-lib})
