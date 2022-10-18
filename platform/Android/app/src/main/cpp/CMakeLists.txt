@@ -23,11 +23,9 @@ add_library( # Sets the name of the library.
         # Provides a relative path to your source file(s).
         main.cpp
 
-        AndroidOut.cpp
-        Renderer.cpp
-        Shader.cpp
-        TextureAsset.cpp
-        Utility.cpp)
+        Engine.cpp
+        bridge.cpp
+        )
 
 add_library(
         hbat
@@ -36,8 +34,6 @@ add_library(
 )
 set_target_properties(hbat PROPERTIES IMPORTED_LOCATION
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../target/androabis/${ANDROID_ABI}/libhbat.a)
-
-
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
