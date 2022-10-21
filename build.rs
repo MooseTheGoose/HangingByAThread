@@ -5,12 +5,12 @@ use std::path::Path;
 
 fn android_host_dir() -> &'static str {
     let host = env::var("HOST").unwrap();
-    if host.contains("aarch64") || host.contains("arm") || host.contains("thumb") {
-        panic!("AArch64/ARM/Thumb hosts are unimplemented.");
+    if host.contains("arm") || host.contains("thumb") {
+        panic!("ARM/Thumb hosts are unimplemented.");
     }
     return match host.as_str() {
         "x86_64-pc-windows-gnu" | "x86_64-pc-windows-msvc" => "windows-x86_64",
-        "x86_64-apple-darwin" => "darwin-x86_64",
+        "x86_64-apple-darwin" | "aarch64-apple-darwin" => "darwin-x86_64",
         _ => "linux-x86_64"
     };
 }
