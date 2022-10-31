@@ -5,6 +5,7 @@
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 #include <memory>
 #include <algorithm>
+#include <exception>
 #include <GLES3/gl3.h>
 #include "Engine.h"
 
@@ -55,7 +56,7 @@ Engine::~Engine() {
     eglDestroySurface(eglDisplay, eglSurface);
 }
 extern "C" void bridge_backendSetEngine(Engine *engine);
-extern "C" void bridge_frontendUpdate();
+extern "C" bool bridge_frontendUpdate();
 void Engine::update() {
     int newWidth, newHeight;
     bridge_backendSetEngine(this);
@@ -66,7 +67,11 @@ void Engine::update() {
         height = newHeight;
         setViewport(0, 0, width, height);
     }
-    bridge_frontendUpdate();
+    // If the frontend update fails so catastrophically
+    // that this returns false, just terminate.
+    if (!bridge_frontendUpdate()) {
+        std::terminate();
+    }
 }
 void Engine::clearScreen(float r, float g, float b, float a) {
     glClearColor(r, g, b, a);

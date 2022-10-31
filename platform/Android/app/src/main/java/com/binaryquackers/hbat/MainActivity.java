@@ -1,11 +1,13 @@
 package com.binaryquackers.hbat;
 
+import android.content.res.AssetManager;
 import android.os.Bundle;
 import android.view.View;
 
 import com.google.androidgamesdk.GameActivity;
 
 public class MainActivity extends GameActivity {
+    private static native void setAssetManager(AssetManager mgr);
     static {
         System.loadLibrary("hbatandroid");
     }
@@ -13,6 +15,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstance) {
         super.onCreate(savedInstance);
+        setAssetManager(getResources().getAssets());
     }
 
     @Override

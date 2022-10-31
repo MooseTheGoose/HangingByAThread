@@ -13,7 +13,7 @@ ANDROID_ABI_FILTER_LUT = {
 
 def mkdir_p(name):
     try:
-        os.mkdir(name)
+        os.makedirs(name)
     except FileExistsError:
         pass
 def unlink_f(name):
@@ -44,7 +44,7 @@ def main():
     # Build android package using targets specified
     android_abis = [(target, ANDROID_ABI_FILTER_LUT[target]) for target in target_arches if 'android' in target]
     if len(android_abis) > 0:
-        abi_root = os.path.join('target', 'androabis')
+        abi_root = os.path.join('build', 'androabis')
         mkdir_p(abi_root)
         for target, abi in android_abis:
             targetPath = os.path.join('target', target, 'debug')

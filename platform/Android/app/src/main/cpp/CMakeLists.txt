@@ -33,7 +33,7 @@ add_library(
         IMPORTED
 )
 set_target_properties(hbat PROPERTIES IMPORTED_LOCATION
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../target/androabis/${ANDROID_ABI}/libhbat.a)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../build/androabis/${ANDROID_ABI}/libhbat.a)
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by

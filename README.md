@@ -1,5 +1,5 @@
-# hbat-game
-Hanging by a Thread: An MMBN-like mobile game 
+# Hanging by a Thread
+A 3D MMBN-like mobile game
 
 # How to build the game
 The frontend libs for the game are written in
@@ -12,7 +12,7 @@ After that, the Rust libraries will be built and ready
 to link in the OS-specific package manager.  
 
 After that, go to the 'platform' folder and you'll
-see the Android folder (iOS folder will be later implemented).
+see the android folder (ios folder will be later implemented).
 
 These folders contain OS-specific projects that you can
 open up in their IDEs (Android Studio, XCode) and just
