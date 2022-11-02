@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 use crate::*;
-use crate::log::*;
+use crate::utils::*;
 use crate::fs::*;
 use std::ptr::addr_of_mut;
+use log::*;
 
 #[link(name = "hbatandroid")]
 extern {
@@ -25,7 +26,7 @@ impl Engine {
     }
     pub fn clear_screen(&mut self, r: f32, g: f32, b: f32, a: f32) {
         unsafe {
-            bridge_backendClearScreen(0.57, 0.70, 0.86, 1.0);
+            bridge_backendClearScreen(r, g, b, a);
         }
     }
     pub fn swap_buffers(&mut self) {
@@ -37,10 +38,10 @@ impl Engine {
         self.refresh_dimensions();
         self.clear_screen(0.57, 0.70, 0.86, 1.0);
         self.swap_buffers();
-        log("Hello, World!", LogType::Debug);
+        info!("Hello, World!");
         let asset_res = File::map("models-le/SimpleBox.model", FSType::Assets);
         if !asset_res.is_ok() {
-            log("Was unable to open asset!", LogType::Warn);
+            warn!("Was unable to open asset!");
             return;
         }
     }

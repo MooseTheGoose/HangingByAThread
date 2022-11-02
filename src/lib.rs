@@ -1,8 +1,34 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#[macro_use] extern crate log;
+extern crate android_logger;
 mod engine;
 mod fs;
-mod log;
+mod utils;
+mod graphics;
+mod math;
+mod devcon;
 use std::panic;
 
+use log::Level;
+use android_logger::{Config,FilterBuilder};
+
+#[no_mangle]
+pub extern "C" fn bridge_frontendDevconEntry() {
+    let _ = panic::catch_unwind(|| {
+        crate::devcon::conmain();
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn bridge_frontendInit() -> bool {
+    return panic::catch_unwind(|| {
+        android_logger::init_once(
+            Config::default()
+                .with_min_level(Level::Trace)
+                .with_tag("HangingByAThread"));
+    }).is_ok();
+}
 
 #[no_mangle]
 pub extern "C" fn bridge_frontendUpdate() -> bool {

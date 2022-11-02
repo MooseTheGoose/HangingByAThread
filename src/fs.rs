@@ -3,7 +3,12 @@ use std::ptr::{null, null_mut, addr_of_mut};
 use std::io::{Result, Error, ErrorKind, SeekFrom, Seek, Read, Write};
 use std::fs::OpenOptions;
 use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::ffi::OsStrExt;
 use memmap2::*;
+use std::convert::AsRef;
+use std::path::Path;
+use crate::utils::*;
+use std::ffi::CString;
 
 // The asset handle and bridge functions
 // are an Android-only thing. On other platforms,
@@ -14,6 +19,7 @@ struct AssetHandle {
     _marker: core::marker::PhantomData<
         (*mut u8, core::marker::PhantomPinned)>,
 }
+
 #[link(name = "hbatandroid")]
 extern {
     fn bridge_backendOpenAsset(fname: *const u8) -> *mut AssetHandle;
@@ -30,10 +36,9 @@ struct Asset {
 }
 
 impl Asset {
-    pub fn open(fname: &str) -> Result<Asset> {
+    pub fn open<P: AsRef<Path>>(fname: P) -> Result<Asset> {
         return unsafe {
-            let cstring = std::ffi::CString::new(fname).unwrap();
-            let cstr = cstring.as_c_str();
+            let cstr = result_to_io(CString::new(fname.as_ref().as_os_str().as_bytes()), ErrorKind::InvalidData)?;
             let asset_handle = bridge_backendOpenAsset(cstr.as_ptr() as *const u8);
             if asset_handle != null_mut() {
                 Ok(Asset{asset_handle: asset_handle})
@@ -69,7 +74,7 @@ impl Read for Asset {
 impl Seek for Asset {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         let mut startpos = 0 as u64;
-        let mut to = 0 as i64;
+        let to: i64;
         let from = match pos {
             SeekFrom::Start(tmp) => { to = tmp as i64; 0 },
             SeekFrom::Current(tmp) => { to = tmp; 1 },
@@ -102,7 +107,7 @@ pub struct File {
 }
 
 impl File {
-    pub fn open(fname: &str, fstype: FSType) -> Result<File> {
+    pub fn open<P: AsRef<Path>>(fname: P, fstype: FSType) -> Result<File> {
         return match fstype {
             FSType::Assets => Ok(File {contents: FSHandleType::HAsset(Asset::open(fname)?)}),
             FSType::External => Ok(File {contents: FSHandleType::HExternal(std::fs::File::open(fname)?)}),
@@ -110,11 +115,11 @@ impl File {
     }
 
     // Only external files may be opened like this.
-    pub fn open_options(fname: &str, options: &OpenOptions) -> Result<File> {
+    pub fn open_options<P: AsRef<Path>>(fname: P, options: &OpenOptions) -> Result<File> {
         return Ok(File {contents: FSHandleType::HExternal(options.open(fname)?)});
     }
 
-    pub fn map(fname: &str, fstype: FSType) -> Result<Mmap> {
+    pub fn map<P: AsRef<Path>>(fname: P, fstype: FSType) -> Result<Mmap> {
         match fstype {
             FSType::External => {
                 let tmp = std::fs::File::open(fname)?;
@@ -124,9 +129,8 @@ impl File {
                 let mut start = 0 as u64;
                 let mut len = 0 as u64;
                 unsafe {
-                    let cstring = std::ffi::CString::new(fname).unwrap();
-                    let cstr = cstring.as_c_str();
-                    let fd = bridge_backendOpenFdAsset(cstr.to_bytes().as_ptr(), addr_of_mut!(start), addr_of_mut!(len));
+                    let cstr = result_to_io(CString::new(fname.as_ref().as_os_str().as_bytes()), ErrorKind::InvalidData)?;
+                    let fd = bridge_backendOpenFdAsset(cstr.as_ptr() as *const u8, addr_of_mut!(start), addr_of_mut!(len));
                     if fd < 0 { return Err(Error::last_os_error()); }
                     if len > std::usize::MAX as u64 {
                         return Err(Error::new(ErrorKind::OutOfMemory, "Can't map size > usize::MAX")); 

@@ -9,6 +9,66 @@
 extern "C" {
 
 #include <game-activity/native_app_glue/android_native_app_glue.c>
+#include <android/log.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/stat.h>
+
+bool running = true;
+
+void bridge_frontendDevconEntry();
+static void *devconLoop(void *arg) {
+    struct android_app *pApp = reinterpret_cast<struct android_app *>(arg);
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock == -1) {
+        __android_log_print(ANDROID_LOG_WARN, "HangingByAThread", "Unable to open UNIX socket for devcon\n");
+        return NULL;
+    }
+    sockaddr_un unixAddr = {AF_UNIX};
+    snprintf(unixAddr.sun_path, sizeof(unixAddr.sun_path), "%s/devcon", pApp->activity->internalDataPath);
+    unlink(unixAddr.sun_path);
+    int status = bind(sock, (struct sockaddr *)&unixAddr, sizeof(unixAddr));
+    if (status == -1) {
+        __android_log_print(ANDROID_LOG_WARN, "HangingByAThread", "Unable to bind to '%s'\n", unixAddr.sun_path);
+        close(sock);
+        return NULL;
+    }
+    listen(sock, 1);
+    __android_log_print(ANDROID_LOG_INFO, "HangingByAThread", "Waiting for devcon client on UNIX socket '%s'\n", unixAddr.sun_path);
+    while (running) {
+        int client = accept(sock, nullptr, nullptr);
+        if (client == -1) {
+            __android_log_print(ANDROID_LOG_WARN, "HangingByAThread",
+                                "Failed to accept client for devcon\n");
+            continue;
+        }
+        dup2(client, 2);
+        dup2(client, 1);
+        dup2(client, 0);
+        bridge_frontendDevconEntry();
+        close(client);
+    }
+    close(sock);
+    pthread_exit(NULL);
+}
+
+bool bridge_frontendInit();
+static void initializeRuntime(struct android_app *pApp) {
+    static bool initialized = false;
+    if (!initialized) {
+#ifdef HBAT_DEBUG
+        pthread_t thread;
+        if(pthread_create(&thread, NULL, devconLoop, pApp)) {
+            __android_log_print(ANDROID_LOG_WARN, "HangingByAThread", "Failed to start pthread for devcon\n");
+        }
+#endif
+        if (!bridge_frontendInit()) {
+            __android_log_print(ANDROID_LOG_ERROR, "HangingByAThread", "Failed to initialize frontend!\n");
+            std::terminate();
+        }
+    }
+}
 
 /*!
  * Handles commands sent to this Android application
@@ -40,8 +100,10 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
 /*!
  * This the main entry point for a native activity
  */
+void bridge_backendInitFromApp(struct android_app *pApp);
 void android_main(struct android_app *pApp) {
-    // Can be removed, useful to ensure your code is running
+    bridge_backendInitFromApp(pApp);
+    initializeRuntime(pApp);
 
     // register an event handler for Android events
     pApp->onAppCmd = handle_cmd;
