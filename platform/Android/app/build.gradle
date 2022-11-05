@@ -1,14 +1,17 @@
 plugins {
     id 'com.android.application'
 }
-
+String HBAT_ROOT_DIR = "../../..";
 android {
     namespace 'com.binaryquackers.hbat'
     compileSdk 33
 
 
     sourceSets {
-        main.assets.srcDirs += '../../../build/assets'
+        main.assets.srcDirs += [
+                HBAT_ROOT_DIR+'/assets',
+                HBAT_ROOT_DIR+'/build/assets',
+        ];
     }
 
     defaultConfig {

@@ -16,13 +16,18 @@ def mkdir_p(name):
         os.makedirs(name)
     except FileExistsError:
         pass
+
 def unlink_f(name):
     try:
         os.unlink(name)
     except FileNotFoundError:
         pass
 
-def main():
+def mklink_f(fname, linkname):
+    unlink_f(linkname)
+    os.link(fname, linkname)
+
+def build_rust():
     target_arches = {
         'aarch64-linux-android',
         'armv7-linux-androideabi',
@@ -53,9 +58,19 @@ def main():
             for fname in os.listdir(targetPath):
                 if fname.startswith('libhbat'):
                     abiLink = os.path.join(abiPath, fname)
-                    unlink_f(abiLink)
-                    os.link(os.path.join(targetPath, fname), os.path.join(abiPath, fname))
+                    mklink_f(os.path.join(targetPath, fname), abiLink)
     # TODO: Build Apple package eventually
+
+def build_assets():
+    # No assets to build at the moment.
+    # They will be built when generating
+    # optimized models from FBX files
+    # via cargo-hbat
+    pass
+
+def main():
+    build_rust()
+    build_assets()
     return 0
 
 if __name__=='__main__':
