@@ -1,6 +1,6 @@
 use std::os::raw::c_int;
 
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::net::UnixListener;
 use libc::*;
 use std::fs::*;
@@ -18,6 +18,7 @@ use log::Level;
 use log::*;
 use android_logger::Config;
 use gl;
+use memmap2::*;
 
 use jni::{JNIEnv, JavaVM};
 use jni::objects::*;
@@ -45,6 +46,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     JNIError(jni::errors::Error),
+    IOError(std::io::Error),
+    NumericConversionError,
     JNINotInitialized,
     UTF8DecodeError,
 }
@@ -58,6 +61,12 @@ impl From<jni::errors::Error> for Error {
 impl From<std::str::Utf8Error> for Error {
     fn from(_e: std::str::Utf8Error) -> Self {
         return Error::UTF8DecodeError;
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        return Error::IOError(e);
     }
 }
 
@@ -76,6 +85,25 @@ fn get_global_jni<'a>(opt: Option<&'a JNIEnv<'a>>) -> Result<&'a JNIEnv<'a>> {
         Some(r) => Ok(r),
         None => Err(Error::JNINotInitialized),
     };
+}
+
+fn describe_and_clear_jni_exception_helper() -> Result<()> {
+    return JNI.with(|jnicell| -> Result<()> {
+        let jniopt = jnicell.borrow();
+        let jniref = get_global_jni(jniopt.as_ref())?;
+        if jniref.exception_check()? {
+            jniref.exception_describe()?;
+            jniref.exception_clear()?;
+        }
+        Ok(())
+    });
+}
+
+fn describe_and_clear_jni_exception() {
+    let res = describe_and_clear_jni_exception_helper();
+    if res.is_err() {
+        warn!("Could not describe and clear JNI exception for some reason. Strange...");
+    }
 }
 
 // Error message to print when JNI not found
@@ -98,12 +126,12 @@ struct Asset {
 }
 
 impl Asset {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Asset> {
+    fn open_helper<P: AsRef<Path>>(path: P) -> Result<Asset> {
         return JNI.with(|jnicell| -> Result<Asset> {
             let jniopt = jnicell.borrow();
             let jniref = get_global_jni(jniopt.as_ref())?;
             let res = {
-                let mgrglobal = unsafe { ASSET_MANAGER.assume_init_read() };
+                let mgrglobal = unsafe { ASSET_MANAGER.assume_init_ref() };
                 let mgr = mgrglobal.as_obj();
                 let fname_str = match path.as_ref().to_str() {
                     Some(s) => Ok(s),
@@ -111,18 +139,46 @@ impl Asset {
                 }?;
                 let jstr = jniref.new_string(fname_str)?;
                 let fname_obj = JValue::Object(JObject::from(jstr));
-                match jniref.call_method(mgr, "open", "(Ljava/lang/String;)Ljava/io/InputStream;", &[fname_obj]) {
-                    Ok(r) => Ok(jniref.new_global_ref(r.l()?)?),
-                    Err(e) => Err(Error::JNIError(e)),
-                }
-            };
-            let _ =  {
-                if jniref.exception_check()? {
-                    jniref.exception_clear()?;
-                }
+                jniref.new_global_ref(jniref.call_method(mgr, "open", "(Ljava/lang/String;)Ljava/io/InputStream;", &[fname_obj])?.l()?)
             };
             Ok(Asset { istream: res? })
         });
+    }
+
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Asset> {
+        let res = Self::open_helper(path);
+        describe_and_clear_jni_exception();
+        return res;
+    } 
+
+    fn map_helper<P: AsRef<Path>>(path: P) -> Result<Mmap> {
+        return JNI.with(|jnicell| -> Result<Mmap> {
+            let jniopt = jnicell.borrow();
+            let jniref = get_global_jni(jniopt.as_ref())?;
+            let mgrglobal = unsafe { ASSET_MANAGER.assume_init_ref() };
+            let mgr = mgrglobal.as_obj();
+            let fname_str = match path.as_ref().to_str() {
+                Some(s) => Ok(s),
+                None => Err(Error::UTF8DecodeError),
+            }?;
+            let jstr = jniref.new_string(fname_str)?;
+            let fname_obj = JValue::Object(JObject::from(jstr));
+            let afd = jniref.call_method(mgr, "openFd", "(Ljava/lang/String;)Landroid/content/res/AssetFileDescriptor;", &[fname_obj])?.l()?;
+            let start = jniref.call_method(afd, "getStartOffset", "()J", &[])?.j()?;
+            let len: usize = match jniref.call_method(afd, "getLength", "()J", &[])?.j()?.try_into().ok() {
+                Some(u) => Ok(u),
+                None => Err(Error::NumericConversionError),
+            }?;
+            let pfd = jniref.call_method(afd, "getParcelFileDescriptor", "()Landroid/os/ParcelFileDescriptor;", &[])?.l()?;
+            let fd = jniref.call_method(pfd, "detachFd", "()I", &[])?.i()?;
+            unsafe { Ok(MmapOptions::new().offset(start as u64).len(len).map(fd)?) }
+        });
+    }
+
+    pub fn map<P: AsRef<Path>>(path: P) -> Result<Mmap> {
+        let res = Self::map_helper(path);
+        describe_and_clear_jni_exception();
+        return res;
     }
 }
 
@@ -187,7 +243,7 @@ pub extern "system" fn Java_com_binaryquackers_hbat_MainGLSurfaceView_00024MainG
     _env: JNIEnv, _renderer: JObject) {
     let _ = catch_unwind(|| {
         initialize_thread_runtime();
-        let asset = Asset::open("models-le/SimpleBox.model");
+        let asset = Asset::map("models-le/SimpleBox.model");
         match asset {
             Ok(_) => info!("SimpleBox opens up fine!"),
             Err(e) => error!("SimpleBox is not opening! {:?}", e),
