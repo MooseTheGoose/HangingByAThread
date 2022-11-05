@@ -1,12 +1,16 @@
 package com.binaryquackers.hbat;
 
-import android.content.res.AssetManager;
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.view.View;
+import android.app.Activity;
 
-import com.google.androidgamesdk.GameActivity;
+import java.io.File;
 
-public class MainActivity extends GameActivity {
+public class MainActivity extends Activity {
+    GLSurfaceView glView;
+    private native void bridgeOnCreate();
+
     static {
         System.loadLibrary("hbatandroid");
     }
@@ -14,6 +18,11 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstance) {
         super.onCreate(savedInstance);
+
+        File dir = getFilesDir();
+        bridgeOnCreate();
+        glView = new MainGLSurfaceView(this);
+        setContentView(glView);
     }
 
     @Override

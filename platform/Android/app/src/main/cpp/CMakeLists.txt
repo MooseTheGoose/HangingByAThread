@@ -23,8 +23,6 @@ add_library( # Sets the name of the library.
         # Provides a relative path to your source file(s).
         main.cpp
 
-        Engine.cpp
-        bridge.cpp
         )
 
 add_library(
@@ -35,22 +33,15 @@ add_library(
 set_target_properties(hbat PROPERTIES IMPORTED_LOCATION
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../build/androabis/${ANDROID_ABI}/libhbat.a)
 
+find_library(
+    log-lib
+    log)
+
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
 # default, you only need to specify the name of the public NDK library
 # you want to add. CMake verifies that the library exists before
 # completing its build.
-
-find_library( # Sets the name of the path variable.
-        log-lib
-
-        # Specifies the name of the NDK library that
-        # you want CMake to locate.
-        log)
-
-# Searches for a package provided by the game activity dependency
-
-find_package(game-activity REQUIRED CONFIG)
 
 # Specifies libraries CMake should link to your target library. You
 # can link multiple libraries, such as libraries you define in this
@@ -59,21 +50,7 @@ find_package(game-activity REQUIRED CONFIG)
 target_link_libraries( # Specifies the target library.
         hbatandroid
         hbat
-
-        android
-
-        # The game activity
-        game-activity::game-activity
-
-        # EGL, required for configuring the display context
         EGL
-
-        # GL ES 3, used for the sample renderer
         GLESv3
-
-        # for AImageDecoder, to load images from resources
-        jnigraphics
-
-        # Links the target library to the log library
-        # included in the NDK.
-        ${log-lib})
+        ${log-lib}
+)
