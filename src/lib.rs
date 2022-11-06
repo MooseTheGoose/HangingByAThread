@@ -3,8 +3,9 @@
 #[macro_use] extern crate log;
 extern crate android_logger;
 extern crate gl;
-use gl::types::*;
 mod devcon;
 
 #[cfg_attr(target_os = "android", path="bridge/android.rs")]
 mod bridge;
+
+

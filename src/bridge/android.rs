@@ -20,10 +20,14 @@ use android_logger::Config;
 use gl;
 use memmap2::*;
 use std::io::{Read};
+use once_cell::sync::{OnceCell, Lazy};
+use std::ops::Deref;
 
 use jni::{JNIEnv, JavaVM};
 use jni::objects::*;
 use jni::sys::*;
+
+type LazyCell<T, F = fn() -> T> = Lazy<T, F>;
 
 #[link(name = "EGL")]
 extern "C" {
@@ -48,6 +52,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     JNIError(jni::errors::Error),
     IOError(std::io::Error),
+    RuntimeNotInitializedError,
     NumericConversionError,
     JNINotInitialized,
     UTF8DecodeError,
@@ -72,26 +77,22 @@ impl From<std::io::Error> for Error {
 }
 
 // Cache the Java VM so all threads can access it.
-static mut JVM: Option<JavaVM> = None;
+static JVM: OnceCell<JavaVM> = OnceCell::new();
 
 // Make JNI a thread-local variable, since the
 // cost of TLS is very small compared to the cost
 // of JNI and makes this global thread-safe.
 thread_local! {
-  static JNI: RefCell<Option<JNIEnv<'static>>> = RefCell::new(None);
-}
-
-fn get_global_jni<'a>(opt: Option<&'a JNIEnv<'a>>) -> Result<&'a JNIEnv<'a>> {
-    return match opt {
-        Some(r) => Ok(r),
-        None => Err(Error::JNINotInitialized),
-    };
+  static JNI: LazyCell<JNIEnv<'static>> = LazyCell::new(|| {
+      let jvm = JVM.get().unwrap();
+      return jvm.attach_current_thread_as_daemon()
+                .expect("Failed to read JNI from JVM");
+  });
 }
 
 fn describe_and_clear_jni_exception_helper() -> Result<()> {
     return JNI.with(|jnicell| -> Result<()> {
-        let jniopt = jnicell.borrow();
-        let jniref = get_global_jni(jniopt.as_ref())?;
+        let jniref = jnicell.deref();
         if jniref.exception_check()? {
             jniref.exception_describe()?;
             jniref.exception_clear()?;
@@ -107,19 +108,16 @@ fn describe_and_clear_jni_exception() {
     }
 }
 
-// Error message to print when JNI not found
-static JNI_NOT_FOUND_MSG: &'static str = "JNI not initialized in this thread!";
-
 // We need a global AssetManager to get Android assets.
 // We can get a global reference and forget about it.
-static mut ASSET_MANAGER: MaybeUninit<GlobalRef> = MaybeUninit::uninit();
+static ASSET_MANAGER: OnceCell<GlobalRef> = OnceCell::new();
 
 // All the path roots we care about in our game.
 // These are initialized if bridgeOnCreate finishes.
-static mut INTERNAL_PATH: MaybeUninit<PathBuf> = MaybeUninit::uninit();
+static INTERNAL_PATH: OnceCell<PathBuf> = OnceCell::new();
 
 pub fn internal_path() -> &'static Path {
-    return unsafe { INTERNAL_PATH.assume_init_ref().as_ref() }
+    return INTERNAL_PATH.get().unwrap().as_ref();
 }
 
 struct Asset {
@@ -129,8 +127,7 @@ struct Asset {
 impl Asset {
     fn read_helper(&mut self, buf: &mut [u8]) -> Result<usize> {
         return JNI.with(|jnicell| -> Result<usize> {
-            let jniopt = jnicell.borrow();
-            let jniref = get_global_jni(jniopt.as_ref())?;
+            let jniref = jnicell.deref();
             let buflen: jsize = match buf.len().try_into().ok() {
                 Some(l) => l,
                 None => { return Err(Error::NumericConversionError); }
@@ -170,10 +167,9 @@ impl std::io::Read for Asset {
 impl Asset {
     fn open_helper<P: AsRef<Path>>(path: P) -> Result<Asset> {
         return JNI.with(|jnicell| -> Result<Asset> {
-            let jniopt = jnicell.borrow();
-            let jniref = get_global_jni(jniopt.as_ref())?;
+            let jniref = jnicell.deref();
             let res = {
-                let mgrglobal = unsafe { ASSET_MANAGER.assume_init_ref() };
+                let mgrglobal = ASSET_MANAGER.get().unwrap();
                 let mgr = mgrglobal.as_obj();
                 let fname_str = match path.as_ref().to_str() {
                     Some(s) => Ok(s),
@@ -195,9 +191,8 @@ impl Asset {
 
     fn map_helper<P: AsRef<Path>>(path: P) -> Result<Mmap> {
         return JNI.with(|jnicell| -> Result<Mmap> {
-            let jniopt = jnicell.borrow();
-            let jniref = get_global_jni(jniopt.as_ref())?;
-            let mgrglobal = unsafe { ASSET_MANAGER.assume_init_ref() };
+            let jniref = jnicell.deref();
+            let mgrglobal = ASSET_MANAGER.get().unwrap();
             let mgr = mgrglobal.as_obj();
             let fname_str = match path.as_ref().to_str() {
                 Some(s) => Ok(s),
@@ -251,25 +246,23 @@ pub extern "C" fn hbat_bridge_stub() {
 
 fn init_paths(ctx: JObject) {
     JNI.with(|jnicell| -> Result<()> {
-        let jniopt = jnicell.borrow();
-        let jniref = get_global_jni(jniopt.as_ref())?;
+        let jniref = jnicell.deref();
         let files_dir = jniref.call_method(ctx, "getFilesDir", "()Ljava/io/File;", &[])?.l()?;
         let abs_path = JString::from(jniref.call_method(files_dir, "getAbsolutePath", "()Ljava/lang/String;", &[])?.l()?);
         let buf = PathBuf::from(
             jniref.get_string(abs_path)?.to_str()?
         );
-        unsafe { INTERNAL_PATH.write(buf); }
+        INTERNAL_PATH.set(buf).unwrap();
         Ok(())
     }).expect("Failed to get file roots from JNI");
 }
 
 fn init_asset_manager(ctx: JObject) {
     JNI.with(|jnicell| -> Result<()> {
-        let jniopt = jnicell.borrow();
-        let jniref = get_global_jni(jniopt.as_ref())?;
+        let jniref = jnicell.deref();
         let asset_manager = jniref.call_method(ctx, "getAssets", "()Landroid/content/res/AssetManager;", &[])?.l()?;
         let global_manager = jniref.new_global_ref(asset_manager)?;
-        unsafe { ASSET_MANAGER.write(global_manager); }
+        ASSET_MANAGER.set(global_manager).unwrap();
         Ok(())
     }).expect("Failed to get AssetManager from JNI");
 }
@@ -285,8 +278,7 @@ pub extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
         android_logger::init_once(
             Config::default().with_min_level(Level::Trace),
         );
-        unsafe { JVM = Some(env.get_java_vm().expect("Unable to get JVM from JNI!")); }
-        initialize_thread_runtime();
+        JVM.set(env.get_java_vm().expect("Unable to get JVM from JNI!")).unwrap();
         init_paths(ctx);
         init_asset_manager(ctx);
         load_gl();
@@ -302,7 +294,6 @@ pub extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
 pub extern "system" fn Java_com_binaryquackers_hbat_MainGLSurfaceView_00024MainGLRenderer_bridgeOnSurfaceCreated(
     _env: JNIEnv, _renderer: JObject) {
     let _ = catch_unwind(|| {
-        initialize_thread_runtime();
         let asset = Asset::map("models-le/SimpleBox.model");
         match asset {
             Ok(_) => info!("SimpleBox opens up fine!"),
@@ -332,22 +323,6 @@ pub extern "system" fn Java_com_binaryquackers_hbat_MainGLSurfaceView_00024MainG
             gl::Viewport(0, 0, width, height);
             // Also reinstantiate everything at this point.
             info!("onSurfaceChanged");
-        }
-    });
-}
-
-// Initialize the runtime for our thread
-// If you forget it, you might panic because
-// JNI isn't initialized. You can't reasonably
-// continue if you fail this, so just panic.
-pub fn initialize_thread_runtime() {
-    JNI.with(|opt| {
-        let mut jniref = opt.borrow_mut();
-        if (*jniref).is_some() { return; }
-        unsafe { 
-            let jvm = JVM.as_ref().expect("WTF?! JVM not initialized?");
-            *jniref = Some(jvm.attach_current_thread_as_daemon()
-                      .expect("Failed to read JNI from JVM"));
         }
     });
 }
