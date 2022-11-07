@@ -1,5 +1,13 @@
 use std::ops::{Mul, Add};
 
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Point3 {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
 #[repr(C, align(8))]
 #[derive(Copy, Clone)]
 pub struct Vector2 {
@@ -91,6 +99,13 @@ pub struct Matrix4 {
     pub v3: Vector4,
     pub v4: Vector4,
 }
+
+pub static M4_IDENTITY: Matrix4 = Matrix4 {
+    v1: Vector4 { x: 1.0, y: 0.0, z: 0.0, w: 0.0 },
+    v2: Vector4 { x: 0.0, y: 1.0, z: 0.0, w: 0.0 },
+    v3: Vector4 { x: 0.0, y: 0.0, z: 1.0, w: 0.0 },
+    v4: Vector4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }
+};
 
 impl Matrix4 {
     // Matrix4's can often be compressed to

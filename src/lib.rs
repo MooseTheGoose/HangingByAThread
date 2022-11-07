@@ -4,6 +4,8 @@
 extern crate android_logger;
 extern crate gl;
 mod devcon;
+mod math;
+mod graphics;
 
 #[cfg_attr(target_os = "android", path="bridge/android.rs")]
 mod bridge;

@@ -9,18 +9,26 @@ import java.io.File;
 
 public class MainActivity extends Activity {
     GLSurfaceView glView;
-    private native void bridgeOnCreate();
+    private native boolean bridgeOnCreate();
 
     static {
         System.loadLibrary("hbatandroid");
     }
 
+    static void onPanic(boolean status) {
+        if (!status) {
+            // Rust code will log into a file
+            // or devcon why it crashed. For now,
+            // just throw a RuntimeException.
+            throw new RuntimeException(
+            "Rust code panicked! Crashing immediately!");
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstance) {
         super.onCreate(savedInstance);
-
-        File dir = getFilesDir();
-        bridgeOnCreate();
+        onPanic(bridgeOnCreate());
         glView = new MainGLSurfaceView(this);
         setContentView(glView);
     }

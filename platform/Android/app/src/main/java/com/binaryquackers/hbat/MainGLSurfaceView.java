@@ -8,20 +8,20 @@ import javax.microedition.khronos.opengles.GL10;
 
 public class MainGLSurfaceView extends GLSurfaceView {
     class MainGLRenderer implements GLSurfaceView.Renderer {
-        private native void bridgeOnSurfaceCreated();
-        private native void bridgeOnDrawFrame();
-        private native void bridgeOnSurfaceChanged();
+        private native boolean bridgeOnSurfaceCreated();
+        private native boolean bridgeOnDrawFrame();
+        private native boolean bridgeOnSurfaceChanged();
 
         public void onSurfaceCreated(GL10 unused, EGLConfig cfg) {
-            bridgeOnSurfaceCreated();
+            MainActivity.onPanic(bridgeOnSurfaceCreated());
         }
 
         public void onDrawFrame(GL10 unused) {
-            bridgeOnDrawFrame();
+            MainActivity.onPanic(bridgeOnDrawFrame());
         }
 
         public void onSurfaceChanged(GL10 unused, int width, int height) {
-            bridgeOnSurfaceChanged();
+            MainActivity.onPanic(bridgeOnSurfaceChanged());
         }
     }
 
