@@ -58,7 +58,13 @@ display-p3/third_party
 #/target
 /Cargo.lock
 
+# We need absolute paths for cargo configuration,
+# so we want to ignore .cargo altogether and generate
+# it at runtime.
+/.cargo
+
 # Project-specific .gitignore entries
 /debug
 __pycache__
 jniLibs
+

@@ -24,7 +24,6 @@ add_library( # Sets the name of the library.
         main.cpp
 
         )
-
 add_library(
         hbat
        STATIC
@@ -32,6 +31,7 @@ add_library(
 )
 set_target_properties(hbat PROPERTIES IMPORTED_LOCATION
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../build/androabis/${ANDROID_ABI}/libhbat.a)
+target_link_options(hbat INTERFACE "-Wl,--no-as-needed")
 
 find_library(
     log-lib
@@ -54,3 +54,4 @@ target_link_libraries( # Specifies the target library.
         GLESv3
         ${log-lib}
 )
+add_link_options("-Wl,--no-as-needed")

@@ -5,7 +5,7 @@ String HBAT_ROOT_DIR = "../../..";
 android {
     namespace 'com.binaryquackers.hbat'
     compileSdk 33
-
+    ndkVersion "25.1.8937393"
 
     sourceSets {
         main.assets.srcDirs += [

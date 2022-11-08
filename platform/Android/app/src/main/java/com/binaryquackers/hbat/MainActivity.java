@@ -8,7 +8,6 @@ import android.app.Activity;
 import java.io.File;
 
 public class MainActivity extends Activity {
-    GLSurfaceView glView;
     private native boolean bridgeOnCreate();
 
     static {
@@ -29,8 +28,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstance) {
         super.onCreate(savedInstance);
         onPanic(bridgeOnCreate());
-        glView = new MainGLSurfaceView(this);
-        setContentView(glView);
     }
 
     @Override

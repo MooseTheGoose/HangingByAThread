@@ -9,7 +9,7 @@ edition = "2021"
 build-target = "0.4.0"
 
 [lib]
-crate-type=["staticlib"]
+crate-type=["staticlib", "cdylib"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.11"
