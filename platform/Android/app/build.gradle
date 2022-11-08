@@ -8,6 +8,9 @@ android {
     ndkVersion "25.1.8937393"
 
     sourceSets {
+        main.jniLibs.srcDirs += [
+                HBAT_ROOT_DIR+'/build/androabis'
+        ];
         main.assets.srcDirs += [
                 HBAT_ROOT_DIR+'/assets',
                 HBAT_ROOT_DIR+'/build/assets',
@@ -29,14 +32,6 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
-
-        debug {
-            externalNativeBuild {
-                cmake {
-                    cppFlags += "-DHBAT_DEBUG"
-                }
-            }
-        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -45,13 +40,6 @@ android {
     buildFeatures {
         prefab true
     }
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/CMakeLists.txt')
-            version '3.18.1'
-        }
-    }
-
 
     androidResources {
         noCompress 'model'
@@ -62,7 +50,6 @@ dependencies {
 
     implementation 'androidx.appcompat:appcompat:1.5.1'
     implementation 'com.google.android.material:material:1.5.0'
-    implementation 'androidx.games:games-activity:1.0.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'

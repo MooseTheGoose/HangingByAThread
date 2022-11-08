@@ -11,7 +11,7 @@ public class MainActivity extends Activity {
     private native boolean bridgeOnCreate();
 
     static {
-        System.loadLibrary("hbatandroid");
+        System.loadLibrary("hbat");
     }
 
     static void onPanic(boolean status) {
