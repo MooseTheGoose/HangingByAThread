@@ -1,7 +1,9 @@
 use jni::{JavaVM,JNIEnv};
-use jni::sys::{jboolean,JNI_FALSE,JNI_TRUE};
+use jni::sys::{jboolean,jint,JNI_FALSE,JNI_TRUE};
 use jni::objects::*;
 use crate::bridge::globals::*;
+use crate::bridge::graphics::*;
+use crate::bridge::activity::Activity;
 use android_logger::*;
 use crate::bridge::{Result,Error};
 use std::ops::Deref;
@@ -27,43 +29,62 @@ pub fn describe_and_clear_jni_exception() {
     }
 }
 
-fn init_paths(ctx: JObject) {
-    JNI.with(|jnicell| -> Result<()> {
-        let jniref = jnicell.deref();
-        let files_dir = jniref.call_method(ctx, "getFilesDir", "()Ljava/io/File;", &[])?.l()?;
-        let abs_path = JString::from(jniref.call_method(files_dir, "getAbsolutePath", "()Ljava/lang/String;", &[])?.l()?);
-        let buf = PathBuf::from(
-            jniref.get_string(abs_path)?.to_str()?
-        );
-        INTERNAL_PATH.set(buf).unwrap();
-        Ok(())
-    }).expect("Failed to get file roots from JNI");
-}
-
-fn init_asset_manager(ctx: JObject) {
-    JNI.with(|jnicell| -> Result<()> {
-        let jniref = jnicell.deref();
-        let asset_manager = jniref.call_method(ctx, "getAssets", "()Landroid/content/res/AssetManager;", &[])?.l()?;
-        let global_manager = jniref.new_global_ref(asset_manager)?;
-        ASSET_MANAGER.set(global_manager).unwrap();
-        Ok(())
-    }).expect("Failed to get AssetManager from JNI");
-}
-
-// Initialize the runtime here with this JNI method.
-// Return if this initialization was successful or not.
 #[no_mangle]
-pub extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
-    env: JNIEnv, ctx: JObject) -> jboolean {
-    // Set up first-time initialization here!
-    return catch_unwind(|| -> jboolean{
-        android_logger::init_once(
-            Config::default().with_min_level(Level::Trace),
-        );
-        JVM.set(env.get_java_vm().expect("Unable to get JVM from JNI!")).unwrap();
-        init_paths(ctx);
-        init_asset_manager(ctx);
-        // spawn(|| { devcon_loop(); });
+extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
+  env: JNIEnv, activity: JObject) -> jboolean {
+    return catch_unwind(|| -> jboolean {
+        let jvm_res = JVM.set(env.get_java_vm().expect("Unable to get JVM from JNI!"));
+        let activity = Activity::new(env, activity).expect("Unable to cache Activity!");
+        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
+        ffi.activity = Some(activity);
+        ANDROID_FFI_CONDVAR.notify_all();
+        drop(ffi);
+        // Initialize logging and start main thread if this is the first time.
+        if jvm_res.is_ok() {
+            android_logger::init_once(
+                Config::default().with_min_level(Level::Trace),
+            );
+        }
+        info!("Activity created!");
         JNI_TRUE
     }).unwrap_or(JNI_FALSE);
 }
+
+#[no_mangle]
+extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnDestroy(
+  _env: JNIEnv, _activity: JObject) -> jboolean {
+    return catch_unwind(|| -> jboolean {
+        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
+        ffi.activity = None;
+        drop(ffi);
+        info!("Activity destroyed!");
+        JNI_TRUE 
+    }).unwrap_or(JNI_FALSE);
+}
+
+#[no_mangle]
+extern "system" fn Java_com_binaryquackers_hbat_MainActivity_00024MainSurfaceCallback_bridgeSurfaceChanged(
+  env: JNIEnv, _callback: JObject, surface: JObject) -> jboolean {
+    return catch_unwind(|| -> jboolean {
+        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
+        ffi.context = Some(Context::new(env, surface)
+                           .expect("Failed to recreate graphics context in MainSurfaceView.surfaceCreated"));
+        ANDROID_FFI_CONDVAR.notify_all();
+        drop(ffi);
+        info!("Surface changed!");
+        JNI_TRUE
+    }).unwrap_or(JNI_FALSE);
+}
+
+#[no_mangle]
+extern "system" fn Java_com_binaryquackers_hbat_MainActivity_00024MainSurfaceCallback_bridgeSurfaceDestroyed(
+  _env: JNIEnv, _callback: JObject) -> jboolean {
+    return catch_unwind(|| -> jboolean {
+        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
+        ffi.context = None;
+        drop(ffi);
+        info!("Surface destroyed!");
+        JNI_TRUE
+    }).unwrap_or(JNI_FALSE);
+}
+

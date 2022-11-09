@@ -1,3 +1,12 @@
+
+// TODO:
+// We only implement Asset with the Read trait by
+// allocating a byte array everytime and reading
+// from the InputStream. We should instead implement
+// BufRead, wrap the stream in a ReadableByteChannel,
+// and allocate a direct byte buffer with a controllable
+// capacity at construction to really boost IO performance
+// (which is kind of the point of Asset...)
 struct Asset {
     istream: GlobalRef,
 }

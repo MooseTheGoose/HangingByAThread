@@ -2,8 +2,10 @@
 //pub mod android;
 //pub mod asset;
 //pub mod devcon;
+pub mod activity;
 pub mod globals;
 pub mod bindings;
+pub mod graphics;
 
 use once_cell::sync::{OnceCell, Lazy};
 
@@ -19,6 +21,7 @@ pub enum Error {
     NumericConversionError,
     JNINotInitialized,
     UTF8DecodeError,
+    NoWindow,
 }
 
 impl From<jni::errors::Error> for Error {

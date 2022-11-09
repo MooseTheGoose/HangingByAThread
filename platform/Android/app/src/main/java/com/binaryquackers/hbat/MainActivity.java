@@ -2,13 +2,36 @@ package com.binaryquackers.hbat;
 
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Surface;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.app.Activity;
 
 import java.io.File;
 
 public class MainActivity extends Activity {
+    private SurfaceView mSurfaceView;
     private native boolean bridgeOnCreate();
+    private native boolean bridgeOnDestroy();
+
+    private class MainSurfaceCallback implements SurfaceHolder.Callback {
+        private native boolean bridgeSurfaceChanged(Surface s);
+        private native boolean bridgeSurfaceDestroyed();
+        String TAG = "MainSurfaceCallbacks";
+        public void surfaceCreated(SurfaceHolder holder) {
+            Log.i(TAG, "surfaceCreated");
+        }
+        public void surfaceChanged(SurfaceHolder holder, int fmt, int width, int height) {
+            Log.i(TAG, "surfaceChanged");
+            MainActivity.onPanic(bridgeSurfaceChanged(holder.getSurface()));
+        }
+        public void surfaceDestroyed(SurfaceHolder holder) {
+            Log.i(TAG, "surfaceDestroyed");
+            MainActivity.onPanic(bridgeSurfaceDestroyed());
+        }
+    }
 
     static {
         System.loadLibrary("hbat");
@@ -28,6 +51,16 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstance) {
         super.onCreate(savedInstance);
         onPanic(bridgeOnCreate());
+        mSurfaceView = new SurfaceView(this);
+        mSurfaceView.getHolder().addCallback(new MainSurfaceCallback());
+        setContentView(mSurfaceView);
+    }
+
+    @Override
+    protected void onDestroy() {
+        // Call bridge to destroy things.
+        onPanic(bridgeOnDestroy());
+        super.onDestroy();
     }
 
     @Override
