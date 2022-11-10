@@ -68,3 +68,5 @@ display-p3/third_party
 __pycache__
 jniLibs
 
+# I hate VIM
+*.swp
