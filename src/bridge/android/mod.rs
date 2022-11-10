@@ -5,6 +5,8 @@
 pub mod activity;
 pub mod globals;
 pub mod bindings;
+
+#[path="graphics/mod.rs"]
 pub mod graphics;
 
 use once_cell::sync::{OnceCell, Lazy};
@@ -18,9 +20,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     JNIError(jni::errors::Error),
     IOError(std::io::Error),
+    EGLError(khronos_egl::Error),
+    EGLNoDisplay,
+    EGLInvalidLibrary,
+    NoEGLConfigs,
     NumericConversionError,
     JNINotInitialized,
     UTF8DecodeError,
+    WrongThread,
     NoWindow,
 }
 
@@ -42,3 +49,8 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<khronos_egl::Error> for Error {
+    fn from(e: khronos_egl::Error) -> Self {
+        return Error::EGLError(e);
+    }
+}

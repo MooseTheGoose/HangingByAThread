@@ -10,24 +10,9 @@ use std::ops::Deref;
 use std::panic::catch_unwind;
 use std::path::{PathBuf,Path};
 use log::*;
+use std::sync::atomic::{Ordering, fence};
+use std::thread::{self,ThreadId};
 
-pub fn describe_and_clear_jni_exception_helper() -> Result<()> {
-    return JNI.with(|jnicell| -> Result<()> {
-        let jniref = jnicell.deref();
-        if jniref.exception_check()? {
-            jniref.exception_describe()?;
-            jniref.exception_clear()?;
-        }
-        Ok(())
-    });
-}
-
-pub fn describe_and_clear_jni_exception() {
-    let res = describe_and_clear_jni_exception_helper();
-    if res.is_err() {
-        warn!("Could not describe and clear JNI exception for some reason. Strange...");
-    }
-}
 
 #[no_mangle]
 extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
@@ -35,15 +20,32 @@ extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
     return catch_unwind(|| -> jboolean {
         let jvm_res = JVM.set(env.get_java_vm().expect("Unable to get JVM from JNI!"));
         let activity = Activity::new(env, activity).expect("Unable to cache Activity!");
-        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
-        ffi.activity = Some(activity);
-        ANDROID_FFI_CONDVAR.notify_all();
-        drop(ffi);
+        let mut guard = ACTIVITY_LOCK.write().unwrap();
+        *guard = Some(activity);
+        ACTIVITY_CONDVAR.notify_all();
+        drop(guard); 
         // Initialize logging and start main thread if this is the first time.
         if jvm_res.is_ok() {
             android_logger::init_once(
                 Config::default().with_min_level(Level::Trace),
             );
+            thread::spawn(move || -> ! {
+                let tid = thread::current().id();
+                LOCAL_THREAD_ID.with(|tidcell| { 
+                    tidcell.set(tid).expect("Local thread id already set?");
+                });
+                RENDERER_THREAD_ID.set(tid).expect("Renderer thread id already set?");
+                loop {
+                    let mut graphics = GRAPHICS_MUTEX.lock().unwrap();
+                    while graphics.as_ref().is_none() {
+                        graphics = GRAPHICS_CONDVAR.wait(graphics).unwrap();
+                    }
+                    let graphics_unwrapped = graphics.as_mut().unwrap();
+                    crate::mainloop::render(graphics_unwrapped);
+                    unsafe { graphics_unwrapped.swap_buffers(); }
+                    drop(graphics);
+                }
+            });
         }
         info!("Activity created!");
         JNI_TRUE
@@ -54,9 +56,9 @@ extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
 extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnDestroy(
   _env: JNIEnv, _activity: JObject) -> jboolean {
     return catch_unwind(|| -> jboolean {
-        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
-        ffi.activity = None;
-        drop(ffi);
+        let mut guard = ACTIVITY_LOCK.write().unwrap();
+        *guard = None;
+        drop(guard);
         info!("Activity destroyed!");
         JNI_TRUE 
     }).unwrap_or(JNI_FALSE);
@@ -66,11 +68,11 @@ extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnDestroy(
 extern "system" fn Java_com_binaryquackers_hbat_MainActivity_00024MainSurfaceCallback_bridgeSurfaceChanged(
   env: JNIEnv, _callback: JObject, surface: JObject) -> jboolean {
     return catch_unwind(|| -> jboolean {
-        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
-        ffi.context = Some(Context::new(env, surface)
-                           .expect("Failed to recreate graphics context in MainSurfaceView.surfaceCreated"));
-        ANDROID_FFI_CONDVAR.notify_all();
-        drop(ffi);
+        let graphics = Graphics::new(env, surface).expect("Failed to initialized graphics!");
+        let mut guard = GRAPHICS_MUTEX.lock().unwrap();
+        *guard = Some(graphics);
+        GRAPHICS_CONDVAR.notify_all();
+        drop(guard);
         info!("Surface changed!");
         JNI_TRUE
     }).unwrap_or(JNI_FALSE);
@@ -80,9 +82,9 @@ extern "system" fn Java_com_binaryquackers_hbat_MainActivity_00024MainSurfaceCal
 extern "system" fn Java_com_binaryquackers_hbat_MainActivity_00024MainSurfaceCallback_bridgeSurfaceDestroyed(
   _env: JNIEnv, _callback: JObject) -> jboolean {
     return catch_unwind(|| -> jboolean {
-        let mut ffi = ANDROID_FFI_MUTEX.write().unwrap();
-        ffi.context = None;
-        drop(ffi);
+        let mut guard = GRAPHICS_MUTEX.lock().unwrap();
+        *guard = None;
+        drop(guard);
         info!("Surface destroyed!");
         JNI_TRUE
     }).unwrap_or(JNI_FALSE);
