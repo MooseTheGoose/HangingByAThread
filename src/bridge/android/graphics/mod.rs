@@ -13,6 +13,7 @@ use raw_window_handle::{
 };
 use libloading::Library;
 use khronos_egl as egl;
+use egl::*;
 use gl;
 use std::ffi::CString;
 use crate::bridge::globals::*;
@@ -68,6 +69,7 @@ unsafe impl HasRawWindowHandle for WWindow {
 }
 
 pub struct PlatformGLContext {
+    api: egl::Instance<Dynamic<libloading::Library,egl::EGL1_0>>,
     display: egl::Display,
     surface: egl::Surface,
     egl_ctx: egl::Context,
@@ -76,14 +78,9 @@ pub struct PlatformGLContext {
 
 impl PlatformGLContext {
     pub unsafe fn swap_buffers(&mut self) {
-        match egl::DynamicInstance::<egl::EGL1_0>::load_required() {
-            Ok(api) => {
-               match api.swap_buffers(self.display, self.surface) {
-                   Err(e) => { log::warn!("Failed to swap buffers: {:?}", e); }
-                   _ => {}
-               } 
-            },
-            Err(e) => { log::warn!("Failed to swap buffers!: {:?}", e); },
+        match self.api.swap_buffers(self.display, self.surface) {
+            Err(e) => { log::warn!("Failed to swap buffers: {:?}", e); }
+            _ => {}
         };
     }
 }
@@ -92,18 +89,11 @@ unsafe impl Send for PlatformGLContext {}
 
 impl Drop for PlatformGLContext {
     fn drop(&mut self) {
-        unsafe {
-            match egl::DynamicInstance::<egl::EGL1_0>::load_required() {
-                Ok(api) => {
-                    if api.destroy_context(self.display,self.egl_ctx).is_err() {
-                        log::error!("Failed to destroy EGL Context?");
-                    }
-                    if api.destroy_surface(self.display,self.surface).is_err() {
-                        log::error!("Failed to destroy EGL surface?");
-                    }
-                },
-               Err(_) => { log::error!("Failed to create API again from lib!"); },
-            }
+        if self.api.destroy_context(self.display,self.egl_ctx).is_err() {
+           log::error!("Failed to destroy EGL Context?");
+        }
+        if self.api.destroy_surface(self.display,self.surface).is_err() {
+            log::error!("Failed to destroy EGL surface?");
         }
     }
 }
@@ -189,6 +179,7 @@ impl Graphics {
             };
         });
         return Ok(PlatformGLContext {
+            api: egl_api,
             display: display,
             surface: surface,
             egl_ctx: ctx,
