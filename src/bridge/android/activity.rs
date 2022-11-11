@@ -1,4 +1,4 @@
-use jni::objects::{GlobalRef,JObject,JString,JValue,JClass};
+use jni::objects::{GlobalRef,JObject,JString,JValue,JClass,JByteBuffer};
 use crate::bridge::{Result,Error};
 use jni::JNIEnv;
 use jni::descriptors::Desc;
@@ -119,7 +119,12 @@ impl BufRead for Asset<'_> {
                     amt_read = jniref.call_method(channel_obj, "read", "(Ljava/nio/ByteBuffer;)I", &[JValue::Object(bytebuffer_obj)])?.i()?;
                 }
                 amt_read = std::cmp::max(amt_read, 0);
-                self.input_data = unsafe { std::slice::from_raw_parts(self.input_data.as_ptr(), amt_read as usize) };
+                self.input_data = unsafe {
+                    std::slice::from_raw_parts(
+                        jniref.get_direct_buffer_address(JByteBuffer::from(bytebuffer_obj))?,
+                        amt_read as usize,
+                    )
+                };
                 Ok(())
             })?;
         }

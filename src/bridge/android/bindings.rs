@@ -48,22 +48,6 @@ extern "system" fn Java_com_binaryquackers_hbat_MainActivity_bridgeOnCreate(
                 }
             });
         }
-        let tmp = ACTIVITY_LOCK.read().unwrap();
-        match Asset::open("android/shaders/basic/basic.vert", tmp.as_ref().unwrap()) {
-            Ok(asset) => {
-                info!("Opened asset! Reading it line by line");
-                for line in asset.lines() {
-                    match line {
-                        Ok(l) => info!("{}", l),
-                        Err(e) => error!("Failed to read a line! {:?}", e),
-                    };
-                }
-            },
-            Err(e) => {
-                error!("Failed to open asset! {:?}", e);
-            },
-        }
-        drop(tmp);
         info!("Activity created!");
         JNI_TRUE
     }).unwrap_or(JNI_FALSE);
