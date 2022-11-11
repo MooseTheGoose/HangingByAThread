@@ -10,6 +10,7 @@ pub mod bindings;
 pub mod graphics;
 
 use once_cell::sync::{OnceCell, Lazy};
+use std::fmt::format;
 
 type LazyCell<T, F = fn() -> T> = Lazy<T, F>;
 type SyncOnceCell<T> = OnceCell<T>;
@@ -52,5 +53,14 @@ impl From<std::io::Error> for Error {
 impl From<khronos_egl::Error> for Error {
     fn from(e: khronos_egl::Error) -> Self {
         return Error::EGLError(e);
+    }
+}
+
+impl From<Error> for std::io::Error {
+    fn from(e: Error) -> Self {
+        return match e {
+           Error::IOError(ioe) => ioe,
+           _ => std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}",e)),
+        };
     }
 }
