@@ -68,17 +68,43 @@ unsafe impl HasRawWindowHandle for WWindow {
     }
 }
 
+// Wrapper around EGL surface for impl Drop
+pub struct WEGLSurface(pub egl::Surface, pub egl::Display,
+  pub Rc<egl::Instance<Dynamic<libloading::Library,egl::EGL1_0>>>);
+
+impl Drop for WEGLSurface {
+    fn drop(&mut self) {
+        match self.2.destroy_surface(self.1,self.0) {
+            Err(e) => log::error!("Failed to destroy EGL surface: {:?}", e), 
+            Ok(_) => {},
+        };
+    }
+}
+
+// Wrapper around context 
+pub struct WEGLContext(pub egl::Context, pub egl::Display,
+    pub Rc<egl::Instance<Dynamic<libloading::Library,egl::EGL1_0>>>);
+
+impl Drop for WEGLContext {
+    fn drop(&mut self) {
+        match self.2.destroy_context(self.1,self.0) {
+            Err(e) => log::error!("Failed to destroy EGL context: {:?}", e),
+            Ok(_) => {},
+        };
+    }
+}
+
 pub struct PlatformGLContext {
-    api: egl::Instance<Dynamic<libloading::Library,egl::EGL1_0>>,
+    api: Rc<egl::Instance<Dynamic<libloading::Library,egl::EGL1_0>>>,
     display: egl::Display,
-    surface: egl::Surface,
-    egl_ctx: egl::Context,
+    surface: WEGLSurface,
+    egl_ctx: WEGLContext,
     pub context: Context,
 }
 
 impl PlatformGLContext {
     pub unsafe fn swap_buffers(&mut self) {
-        match self.api.swap_buffers(self.display, self.surface) {
+        match self.api.swap_buffers(self.display, self.surface.0) {
             Err(e) => { log::warn!("Failed to swap buffers: {:?}", e); }
             _ => {}
         };
@@ -86,17 +112,6 @@ impl PlatformGLContext {
 }
 
 unsafe impl Send for PlatformGLContext {}
-
-impl Drop for PlatformGLContext {
-    fn drop(&mut self) {
-        if self.api.destroy_context(self.display,self.egl_ctx).is_err() {
-           log::error!("Failed to destroy EGL Context?");
-        }
-        if self.api.destroy_surface(self.display,self.surface).is_err() {
-            log::error!("Failed to destroy EGL surface?");
-        }
-    }
-}
 
 pub struct Graphics {
     window: WWindow,
@@ -126,10 +141,10 @@ impl Graphics {
         return Ok(ctx);
     }
     pub unsafe fn get_gl_context<'a>(&'a mut self) -> Result<PlatformGLContext> {
-        let egl_api = match egl::DynamicInstance::<egl::EGL1_0>::load_required() {
+        let egl_api = Rc::new(match egl::DynamicInstance::<egl::EGL1_0>::load_required() {
             Ok(api) => Ok(api),
             Err(_e) => Err(Error::EGLInvalidLibrary),
-        }?;
+        }?);
         let display = match egl_api.get_display(egl::DEFAULT_DISPLAY) {
             Some(d) => Ok(d),
             None => Err(Error::EGLNoDisplay),
@@ -155,23 +170,19 @@ impl Graphics {
                 */
 		egl::NONE
 	];
-        let ctx = egl_api.create_context(display, cfg, None, &context_attributes)?;
+        let ctx_unwrapped = egl_api.create_context(display, cfg, None, &context_attributes)?;
+        let ctx = WEGLContext(ctx_unwrapped, display, egl_api.clone());
         let surface_attributes = [
             egl::NONE,
         ];
-        let surface_res = egl_api.create_window_surface(
+        let surface_unwrapped = egl_api.create_window_surface(
             display,
             cfg,
             self.window.get_raw() as *mut c_void,
             Some(&surface_attributes),
-        );
-        if surface_res.is_err() {
-            if egl_api.destroy_context(display, ctx).is_err() {
-                log::error!("Failed to destroy the EGL context I just created!");
-            }
-        }
-        let surface = surface_res?;
-        let _ = egl_api.make_current(display, Some(surface), Some(surface), Some(ctx));
+        )?;
+        let surface = WEGLSurface(surface_unwrapped, display, egl_api.clone());
+        let _ = egl_api.make_current(display, Some(surface.0), Some(surface.0), Some(ctx.0));
         gl::load_with(|s| -> *const _ {
             return match egl_api.get_proc_address(s) {
                 Some(p) => p as *const c_void,
