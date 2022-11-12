@@ -18,6 +18,8 @@ use gl;
 use std::ffi::CString;
 use crate::bridge::globals::*;
 use std::boxed::Box;
+use std::ffi::CStr;
+use std::ffi::c_char;
 
 #[repr(C)]
 pub struct ANativeWindow {
@@ -163,11 +165,6 @@ impl Graphics {
         // To start, only use OpenGL 2 so we maintain compatibility.
         // Optimize later for OpenGL 3 contexts.
 	let context_attributes = [
-                /*
-		egl::CONTEXT_MAJOR_VERSION, 4,
-		egl::CONTEXT_MINOR_VERSION, 0,
-		egl::CONTEXT_OPENGL_PROFILE_MASK, egl::CONTEXT_OPENGL_CORE_PROFILE_BIT,
-                */
 		egl::NONE
 	];
         let ctx_unwrapped = egl_api.create_context(display, cfg, None, &context_attributes)?;
@@ -189,12 +186,27 @@ impl Graphics {
                 None => null() as *const c_void,
             };
         });
+        // We can prove that a context is version 2.0 on
+        // Android if the glGetIntegerv call here fails.
+        // Otherwise, we get the version number as normal.
+        let mut major: i32 = 2;
+        let mut minor: i32 = 0;
+        gl::GetIntegerv(gl::MAJOR_VERSION, &mut major as *mut i32);
+        let err = gl::GetError();
+        if err == gl::NO_ERROR {
+            gl::GetIntegerv(gl::MINOR_VERSION, &mut minor as *mut i32); 
+        } else {
+            major = 2;
+        }
         return Ok(PlatformGLContext {
             api: egl_api,
             display: display,
             surface: surface,
             egl_ctx: ctx,
-            context: Context::GL(crate::graphics::gl::Context()),
+            context: Context::GL(crate::graphics::gl::Context {
+                major: major as u8,
+                minor: minor as u8,
+            }),
         });
     }
     pub unsafe fn get_context<'a>(&'a mut self) -> Result<&'a Context> {
