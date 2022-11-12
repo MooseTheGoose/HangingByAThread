@@ -10,7 +10,7 @@ pub fn render(graphics: &mut Graphics) {
             info!("Got the context!");
             unsafe {
                 gl::Viewport(0, 0, graphics.width, graphics.height);
-                gl::ClearColor(1.0, 1.0, 1.0, 1.0);
+                gl::ClearColor(1.0, 0.0, 1.0, 1.0);
                 gl::Clear(gl::COLOR_BUFFER_BIT);
             }
         }

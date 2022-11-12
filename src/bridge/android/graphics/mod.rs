@@ -165,11 +165,22 @@ impl Graphics {
         };
         // To start, only use OpenGL 2 so we maintain compatibility.
         // Optimize later for OpenGL 3 contexts.
-	let context_attributes = [
-		egl::NONE
-	];
-        let ctx_unwrapped = egl_api.create_context(display, cfg, None, &context_attributes)?;
-        let ctx = WEGLContext(ctx_unwrapped, display, egl_api.clone());
+        let supported_versions = [
+            (4,0),
+            (3,0),
+            (2,0),
+        ];
+        let mut ctx_unwrapped: std::result::Result<egl::Context, egl::Error> = Err(egl::Error::BadContext);
+        for version in &supported_versions {
+            let context_attributes = [
+                egl::CONTEXT_MAJOR_VERSION, version.0,
+                egl::CONTEXT_MINOR_VERSION, version.1,
+                egl::NONE,
+            ];
+            ctx_unwrapped = egl_api.create_context(display, cfg, None, &context_attributes);
+            if ctx_unwrapped.is_ok() { break; }
+        }
+        let ctx = WEGLContext(ctx_unwrapped?, display, egl_api.clone());
         let surface_attributes = [
             egl::NONE,
         ];
