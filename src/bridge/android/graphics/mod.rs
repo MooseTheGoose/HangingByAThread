@@ -156,6 +156,7 @@ impl Graphics {
             egl::RED_SIZE, 8,
             egl::GREEN_SIZE, 8,
             egl::BLUE_SIZE, 8,
+            egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT,
             egl::NONE,
         ];
         let cfg = match egl_api.choose_first_config(display, &attrs)? {
@@ -186,9 +187,9 @@ impl Graphics {
                 None => null() as *const c_void,
             };
         });
-        // We can prove that a context is version 2.0 on
-        // Android if the glGetIntegerv call here fails.
-        // Otherwise, we get the version number as normal.
+        // If the glGetIntegerv call here fails, we know
+        // that this context is version 2.0 or 1.1. We require
+        // OpenGL ES 2.0+, so if it fails, we'll assume it's 2.0.
         let mut major: i32 = 2;
         let mut minor: i32 = 0;
         gl::GetIntegerv(gl::MAJOR_VERSION, &mut major as *mut i32);
